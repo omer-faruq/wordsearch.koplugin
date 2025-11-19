@@ -551,6 +551,7 @@ end
 
 function WordGridWidget:init()
     self:updateDimensions(self.scale or GRID_SCALES[DEFAULT_GRID_SCALE])
+    self.highlight_cell = nil
     self.ges_events = {
         Tap = {
             GestureRange:new{
@@ -616,11 +617,15 @@ function WordGridWidget:paintTo(bb, x, y)
     bb:paintRect(x, y, self.dimen.w, self.dimen.h, Blitbuffer.COLOR_WHITE)
     local grid_size = self:getGridSize()
 
+    local highlight = self.highlight_cell
     for row = 1, grid_size do
         for col = 1, grid_size do
             local cell_x = x + (col - 1) * self.cell_size
             local cell_y = y + (row - 1) * self.cell_size
             local color = Blitbuffer.COLOR_WHITE
+            if highlight and highlight.row == row and highlight.col == col then
+                color = Blitbuffer.COLOR_GRAY
+            end
             bb:paintRect(cell_x, cell_y, self.cell_size - 1, self.cell_size - 1, color)
             -- draw border
             bb:paintRect(cell_x, cell_y, self.cell_size, 1, Blitbuffer.COLOR_GRAY_8)
@@ -684,6 +689,27 @@ function WordGridWidget:refresh()
     UIManager:setDirty(self, function()
         return "ui", Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }
     end)
+end
+
+function WordGridWidget:setHighlightCell(row, col)
+    if row and col then
+        local current = self.highlight_cell
+        if current and current.row == row and current.col == col then
+            return
+        end
+        self.highlight_cell = { row = row, col = col }
+    else
+        self.highlight_cell = nil
+    end
+    self:refresh()
+end
+
+function WordGridWidget:clearHighlightCell()
+    if not self.highlight_cell then
+        return
+    end
+    self.highlight_cell = nil
+    self:refresh()
 end
 
 local WordSearchScreen = InputContainer:extend{}
@@ -857,6 +883,17 @@ function WordSearchScreen:refreshScreen()
     UIManager:setDirty(self, function()
         return "ui", self.dimen
     end)
+end
+
+function WordSearchScreen:refreshGridArea()
+    local rect = self.grid_widget and self.grid_widget.paint_rect
+    if rect then
+        UIManager:setDirty(self, function()
+            return "ui", Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }
+        end)
+    else
+        self:refreshScreen()
+    end
 end
 
 function WordSearchScreen:getWordListText()
@@ -1092,6 +1129,8 @@ function WordSearchScreen:onClose()
 end
 
 function WordSearchScreen:onCellTapped(row, col, is_hold)
+    self.grid_widget:setHighlightCell(row, col)
+    self:refreshGridArea()
     if is_hold and self:markWordAtCell(row, col) then
         return
     end
@@ -1126,7 +1165,8 @@ function WordSearchScreen:handleWordFound(entry)
     end
     self.board:setWordFound(entry.word, true)
     self.selection_start = nil
-    self.grid_widget:refresh()
+    self.grid_widget:clearHighlightCell()
+    self:refreshGridArea()
     self:updateStatus()
     self:updateWordList()
     self.plugin:saveBoardState()
