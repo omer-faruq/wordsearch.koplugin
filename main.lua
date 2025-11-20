@@ -835,15 +835,15 @@ function WordSearchScreen:rebuildLayout()
 
     local content = VerticalGroup:new{
         align = "center",
-        VerticalSpan:new{ width = Size.span.vertical_small },
+        VerticalSpan:new{ width = Size.span.vertical_default },
         top_button_table,
-        VerticalSpan:new{ width = Size.span.vertical_small },
+        VerticalSpan:new{ width = Size.span.vertical_default },
         grid_frame,
-        VerticalSpan:new{ width = Size.span.vertical_small },
+        VerticalSpan:new{ width = Size.span.vertical_default },
         counter_box,
-        VerticalSpan:new{ width = Size.span.vertical_small },
+        VerticalSpan:new{ width = Size.span.vertical_default },
         bottom_button_table,
-        VerticalSpan:new{ width = Size.span.vertical_small },
+        VerticalSpan:new{ width = Size.span.vertical_default },
     }
 
     self.layout = CenterContainer:new{
