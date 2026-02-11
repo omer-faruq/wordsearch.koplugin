@@ -80,12 +80,8 @@ local function safeUpper(text)
     return text:upper()
 end
 
-local function applyStrikethrough(word)
-    local parts = {}
-    for glyph in word:gmatch(util.UTF8_CHAR_PATTERN) do
-        parts[#parts + 1] = glyph .. STRIKE_CHAR
-    end
-    return table.concat(parts)
+local function markWordDone(word)
+    return "✓ " .. word
 end
 
 local function getPluginPath()
@@ -123,7 +119,7 @@ local function readWordList(path)
         line = util.trim(line)
         if line ~= "" then
             if #words == 0 and line:find("lang=") then
-                for key, value in line:gmatch("([%w_]+)=([%w_%-]+)") do
+                for key, value in line:gmatch("([^%s]+)=([^%s]+)") do
                     if metadata[key] then
                         metadata[key] = value
                     elseif key == "title" then
@@ -173,13 +169,12 @@ end
 local function canPlaceWord(grid, word, start_x, start_y, dir)
     local size = #grid
     local x, y = start_x, start_y
-    for i = 1, #word do
+    for c in word:gmatch(util.UTF8_CHAR_PATTERN) do
         if x < 1 or x > size or y < 1 or y > size then
             return false
         end
         local cell = grid[y][x]
-        local ch = word:sub(i, i)
-        if cell ~= "" and cell ~= ch then
+        if cell ~= "" and cell ~= c then
             return false
         end
         x = x + dir.dx
@@ -190,19 +185,25 @@ end
 
 local function placeWord(grid, word, start_x, start_y, dir)
     local x, y = start_x, start_y
-    for i = 1, #word do
-        grid[y][x] = word:sub(i, i)
+
+    for c in word:gmatch(util.UTF8_CHAR_PATTERN) do
+        grid[y][x] = c
         x = x + dir.dx
         y = y + dir.dy
     end
 end
 
 local function fillEmptyCells(grid, letters)
+    local codepoints = {}
+    for c in letters:gmatch(util.UTF8_CHAR_PATTERN) do
+        table.insert(codepoints, c)
+    end
+
     for y = 1, #grid do
         for x = 1, #grid do
             if grid[y][x] == "" then
-                local idx = math.random(#letters)
-                grid[y][x] = letters:sub(idx, idx)
+                local idx = math.random(#codepoints)
+                grid[y][x] = codepoints[idx]
             end
         end
     end
@@ -243,7 +244,8 @@ local function generatePuzzle(words, letters, max_words, grid_size)
         end
         local upper_word = safeUpper(word)
         local word_stripped = upper_word:gsub("[^" .. letters .. "]", "")
-        if #word_stripped >= 3 and #word_stripped <= grid_size then
+        local word_stripped_len = Utf8Proc.count(word_stripped)
+        if word_stripped_len >= 3 and word_stripped_len <= grid_size then
             local tries = 0
             local success = false
             local direction_candidates = {}
@@ -274,9 +276,8 @@ local function generatePuzzle(words, letters, max_words, grid_size)
                 if canPlaceWord(grid, word_stripped, start_x, start_y, dir) then
                     local entry = { word = word_stripped, positions = {} }
                     local x, y = start_x, start_y
-                    for i = 1, #word_stripped do
-                        local ch = word_stripped:sub(i, i)
-                        grid[y][x] = ch
+                    for c in word_stripped:gmatch(util.UTF8_CHAR_PATTERN) do
+                        grid[y][x] = c
                         solution_mask[y][x] = true
                         entry.positions[#entry.positions + 1] = { row = y, col = x }
                         x = x + dir.dx
@@ -872,7 +873,7 @@ function WordSearchScreen:updateWordList()
         local prefix = status.found and "✓" or "•"
         local display_word = status.word
         if status.found then
-            display_word = applyStrikethrough(display_word)
+            display_word = markWordDone(display_word)
         end
         lines[#lines + 1] = prefix .. " " .. display_word
     end
@@ -917,7 +918,7 @@ function WordSearchScreen:showWordListOverlay()
     for _, status in ipairs(statuses) do
         local display_word = status.word
         if status.found then
-            display_word = applyStrikethrough(display_word)
+            display_word = markWordDone(display_word)
         end
         items[#items + 1] = {
             text = display_word,
