@@ -769,6 +769,8 @@ function WordSearchScreen:init()
     self.grid_widget = WordGridWidget:new{
         board = self.board,
         scale = GRID_SCALES[self.plugin:getGridScale()] or GRID_SCALES[DEFAULT_GRID_SCALE],
+        font = self.plugin:getGridFont(),
+        font_fill = self.plugin:getFontFill(),
         onCellTapped = function(row, col, is_hold)
             self:onCellTapped(row, col, is_hold)
         end,
@@ -824,15 +826,9 @@ function WordSearchScreen:rebuildLayout()
                     end,
                 },
                 {
-                    text = _("Grid size"),
+                    text = _("Settings"),
                     callback = function()
-                        self:showGridSizeMenu()
-                    end,
-                },
-                {
-                    text = _("Grid zoom"),
-                    callback = function()
-                        self:showGridScaleMenu()
+                        self:showSettingsMenu()
                     end,
                 },
                 {
@@ -1084,6 +1080,119 @@ function WordSearchScreen:showGridScaleMenu()
         item_table = items,
         width = math.floor(Screen:getWidth() * 0.6),
         height = math.floor(Screen:getHeight() * 0.6),
+        show_parent = self,
+    }
+    menu.close_callback = function()
+        self:refreshScreen()
+    end
+    UIManager:show(menu)
+end
+
+function WordSearchScreen:showSettingsMenu()
+    local menu
+    local function closeMenu()
+        if menu then
+            UIManager:close(menu)
+        end
+    end
+    local items = {
+        { text = _("Grid size"),  callback = function() closeMenu(); self:showGridSizeMenu() end },
+        { text = _("Grid zoom"),  callback = function() closeMenu(); self:showGridScaleMenu() end },
+        { text = _("Font"),       callback = function() closeMenu(); self:showFontMenu() end },
+        { text = _("Font size"),  callback = function() closeMenu(); self:showFontSizeMenu() end },
+    }
+    menu = Menu:new{
+        title = _("Settings"),
+        item_table = items,
+        width = math.floor(Screen:getWidth() * 0.6),
+        height = math.floor(Screen:getHeight() * 0.6),
+        show_parent = self,
+    }
+    menu.close_callback = function()
+        self:refreshScreen()
+    end
+    UIManager:show(menu)
+end
+
+function WordSearchScreen:showFontMenu()
+    local menu
+    local function closeMenu()
+        if menu then
+            UIManager:close(menu)
+        end
+    end
+    local current = self.plugin:getGridFont()
+    local items = {
+        {
+            text = _("Default (reading font)"),
+            checked = (current == nil),
+            callback = function()
+                self.plugin:setGridFont(nil)
+                self.grid_widget:setFont(nil, self.plugin:getFontFill())
+                self:refreshGridArea()
+                closeMenu()
+                return true
+            end,
+        },
+    }
+    for _, path in ipairs(FontList:getFontList()) do
+        local name = FontList:getLocalizedFontName(path, 0)
+        if not name then
+            name = path:match("([^/\\]+)%.%w+$") or path
+        end
+        items[#items + 1] = {
+            text = name,
+            checked = (current == path),
+            callback = function()
+                self.plugin:setGridFont(path)
+                self.grid_widget:setFont(path, self.plugin:getFontFill())
+                self:refreshGridArea()
+                closeMenu()
+                return true
+            end,
+        }
+    end
+    menu = Menu:new{
+        title = _("Select grid font"),
+        item_table = items,
+        width = math.floor(Screen:getWidth() * 0.8),
+        height = math.floor(Screen:getHeight() * 0.85),
+        show_parent = self,
+    }
+    menu.close_callback = function()
+        self:refreshScreen()
+    end
+    UIManager:show(menu)
+end
+
+function WordSearchScreen:showFontSizeMenu()
+    local menu
+    local function closeMenu()
+        if menu then
+            UIManager:close(menu)
+        end
+    end
+    local current = self.plugin:getFontSize()
+    local labels = { small = _("Small"), medium = _("Medium"), large = _("Large") }
+    local items = {}
+    for _, key in ipairs(GridFont.FONT_SIZE_ORDER) do
+        items[#items + 1] = {
+            text = labels[key] or key,
+            checked = (key == current),
+            callback = function()
+                self.plugin:setFontSize(key)
+                self.grid_widget:setFont(self.plugin:getGridFont(), self.plugin:getFontFill())
+                self:refreshGridArea()
+                closeMenu()
+                return true
+            end,
+        }
+    end
+    menu = Menu:new{
+        title = _("Select font size"),
+        item_table = items,
+        width = math.floor(Screen:getWidth() * 0.6),
+        height = math.floor(Screen:getHeight() * 0.5),
         show_parent = self,
     }
     menu.close_callback = function()
