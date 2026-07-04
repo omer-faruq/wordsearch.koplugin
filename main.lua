@@ -813,12 +813,6 @@ function WordSearchScreen:rebuildLayout()
         buttons = {
             {
                 {
-                    text = _("Word count"),
-                    callback = function()
-                        self:showWordCountMenu()
-                    end,
-                },
-                {
                     text = _("Word lists"),
                     callback = function()
                         self:chooseWordList()
@@ -1096,6 +1090,7 @@ function WordSearchScreen:showSettingsMenu()
         end
     end
     local items = {
+        { text = _("Word count"), callback = function() closeMenu(); self:showWordCountMenu() end },
         { text = _("Grid size"),  callback = function() closeMenu(); self:showGridSizeMenu() end },
         { text = _("Grid zoom"),  callback = function() closeMenu(); self:showGridScaleMenu() end },
         { text = _("Font"),       callback = function() closeMenu(); self:showFontMenu() end },
