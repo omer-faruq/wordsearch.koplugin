@@ -21,6 +21,8 @@ local Screen = Device.screen
 local Menu = require("ui/widget/menu")
 local RenderText = require("ui/rendertext")
 local Font = require("ui/font")
+local FontList = require("fontlist")
+local GridFont = require("wordsearch_gridfont")
 local T = require("ffi/util").template
 local json = require("json")
 local logger = require("logger")
@@ -517,6 +519,8 @@ end
 local WordGridWidget = InputContainer:extend{
     board = nil,
     scale = nil,
+    font = nil,       -- font file path, or nil for the default reading font (cfont)
+    font_fill = nil,  -- fraction of the cell a letter should fill
 }
 
 function WordGridWidget:getGridSize()
@@ -536,8 +540,46 @@ function WordGridWidget:updateDimensions(scale)
     self.size = math.min(max_width, max_height)
     self.cell_size = math.max(4, math.floor(self.size / grid_size))
     self.dimen = Geom:new{ w = self.cell_size * grid_size, h = self.cell_size * grid_size }
-    self.face = Font:getFace("cfont", math.max(24, math.floor(self.cell_size * 0.6)))
+    self.face = self:buildFace()
     self.paint_rect = Geom:new{ x = 0, y = 0, w = self.dimen.w, h = self.dimen.h }
+end
+
+-- Build a font face whose glyphs (including descenders like "J") fit inside a
+-- cell. We measure the ACTUAL rendered glyph box after KOReader's DPI scaling
+-- and shrink until it fits, which corrects the old double-scaling overflow and
+-- keeps arbitrary user fonts inside their boxes.
+function WordGridWidget:buildFace()
+    local cell_inner = math.max(4, self.cell_size - 2)
+    local fill = self.font_fill or GridFont.getFill(GridFont.DEFAULT_FONT_SIZE)
+    local font = self.font
+    local letters = self.board and self.board.letters or nil
+    if not letters or letters == "" then
+        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    end
+    local function faceAt(size)
+        return Font:getFace(font, size) or Font:getFace("cfont", size)
+    end
+    local function measure(size)
+        local face = faceAt(size)
+        local max_w, max_h = 0, 0
+        for glyph in letters:gmatch(util.UTF8_CHAR_PATTERN) do
+            local m = RenderText:sizeUtf8Text(0, cell_inner * 8, face, glyph, true, false)
+            local w = m.x or 0
+            local h = (m.y_top or 0) + (m.y_bottom or 0)
+            if w > max_w then max_w = w end
+            if h > max_h then max_h = h end
+        end
+        return max_w, max_h
+    end
+    local size = GridFont.computeFontSize(measure, cell_inner, fill, GridFont.MIN_FONT_SIZE)
+    return faceAt(size)
+end
+
+function WordGridWidget:setFont(font, fill)
+    if font == "" then font = nil end
+    self.font = font
+    self.font_fill = fill or self.font_fill
+    self:updateDimensions(self.scale)
 end
 
 function WordGridWidget:setScale(scale)
