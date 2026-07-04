@@ -26,19 +26,23 @@ end
 
 -- Largest integer size, starting from floor(cell_inner*fill) and shrinking by
 -- 1, whose measured glyph box (widest/tallest glyph, in device pixels) fits
--- within cell_inner. Never returns below min_size. measure(size) must return
--- (glyph_w, glyph_h).
+-- within cell_inner. min_size is a hard lower bound: if no size down to and
+-- including min_size fits, min_size is returned (and may still overflow the
+-- cell — callers must keep min_size small enough that this only happens for
+-- pathologically tiny cells). measure(size) must return (glyph_w, glyph_h).
 function GridFont.computeFontSize(measure, cell_inner, fill, min_size)
     min_size = min_size or GridFont.MIN_FONT_SIZE
     local size = math.max(min_size, math.floor(cell_inner * fill))
-    while size > min_size do
+    while true do
         local w, h = measure(size)
         if w <= cell_inner and h <= cell_inner then
-            break
+            return size
+        end
+        if size <= min_size then
+            return size
         end
         size = size - 1
     end
-    return size
 end
 
 return GridFont

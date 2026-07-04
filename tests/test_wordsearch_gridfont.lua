@@ -38,6 +38,12 @@ check(GridFont.computeFontSize(huge, 60, 0.80, 6) == 6, "clamps to min_size")
 local function tiny(size) return size * 0.1, size * 0.1 end
 check(GridFont.computeFontSize(tiny, 60, 0.80, 6) == 48, "no shrink when it fits")
 
+-- FONT_SIZE_ORDER contents and order (the font-size menu iterates this)
+check(#GridFont.FONT_SIZE_ORDER == 3, "FONT_SIZE_ORDER has 3 entries")
+check(GridFont.FONT_SIZE_ORDER[1] == "small", "order[1] = small")
+check(GridFont.FONT_SIZE_ORDER[2] == "medium", "order[2] = medium")
+check(GridFont.FONT_SIZE_ORDER[3] == "large", "order[3] = large")
+
 if failures == 0 then
     print("ALL TESTS PASSED")
     os.exit(0)
