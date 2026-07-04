@@ -1246,6 +1246,8 @@ function WordSearch:init()
     self.max_words = tonumber(self.settings:readSetting("max_words")) or DEFAULT_MAX_WORDS
     self.grid_scale = self.settings:readSetting("grid_scale") or DEFAULT_GRID_SCALE
     self.grid_size = normalizeGridSize(self.settings:readSetting("grid_size") or DEFAULT_GRID_SIZE)
+    self.grid_font = self.settings:readSetting("grid_font") -- may be nil (= default reading font)
+    self.font_size = GridFont.normalizeFontSize(self.settings:readSetting("font_size"))
     self.state_file = DataStorage:getSettingsDir() .. "/wordsearch_state.json"
     self._cached_state = self:loadBoardState()
     self.ui.menu:registerToMainMenu(self)
@@ -1314,6 +1316,8 @@ function WordSearch:getBoard()
                 })
                 self.max_words = state.max_words or self.max_words
                 self.grid_scale = state.grid_scale or self.grid_scale
+                self.grid_font = state.grid_font or self.grid_font
+                self.font_size = GridFont.normalizeFontSize(state.font_size or self.font_size)
             end
         end
         if not self.board then
@@ -1383,6 +1387,8 @@ function WordSearch:saveBoardState()
         max_words = self.max_words,
         grid_scale = self.grid_scale,
         grid_size = self.grid_size,
+        grid_font = self.grid_font,
+        font_size = self.font_size,
         board = self.board:serializeState(),
     }
     local ok, encoded = pcall(json.encode, payload)
@@ -1434,6 +1440,50 @@ function WordSearch:setGridScale(key)
     end
     self.grid_scale = key
     self.settings:saveSetting("grid_scale", key)
+    self.settings:flush()
+    self:saveBoardState()
+end
+
+function WordSearch:getGridFont()
+    local f = self.grid_font
+    if f == "" then
+        return nil
+    end
+    return f
+end
+
+function WordSearch:setGridFont(path)
+    if path == "" then
+        path = nil
+    end
+    if self.grid_font == path then
+        return
+    end
+    self.grid_font = path
+    if path == nil then
+        self.settings:delSetting("grid_font")
+    else
+        self.settings:saveSetting("grid_font", path)
+    end
+    self.settings:flush()
+    self:saveBoardState()
+end
+
+function WordSearch:getFontSize()
+    return GridFont.normalizeFontSize(self.font_size)
+end
+
+function WordSearch:getFontFill()
+    return GridFont.getFill(self:getFontSize())
+end
+
+function WordSearch:setFontSize(key)
+    key = GridFont.normalizeFontSize(key)
+    if self.font_size == key then
+        return
+    end
+    self.font_size = key
+    self.settings:saveSetting("font_size", key)
     self.settings:flush()
     self:saveBoardState()
 end
