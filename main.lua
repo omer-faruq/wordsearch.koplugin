@@ -940,7 +940,7 @@ function WordSearchScreen:showWordListOverlay()
     for _, status in ipairs(statuses) do
         items[#items + 1] = {
             text = status.word,
-            checked = status.found,
+            mandatory = status.found and "✓" or nil,
         }
     end
     local meta = self.board:getMetadata() or {}
@@ -971,7 +971,7 @@ function WordSearchScreen:showWordCountMenu()
     for _idx, count in ipairs(counts) do
         items[#items + 1] = {
             text = T(_("Max words: %1"), count),
-            checked = (count == current),
+            mandatory = (count == current) and "✓" or nil,
             callback = function()
                 if self.plugin.setMaxWords then
                     self.plugin:setMaxWords(count)
@@ -1007,7 +1007,7 @@ function WordSearchScreen:showGridSizeMenu()
     for _idx, size in ipairs(GRID_SIZE_CHOICES) do
         items[#items + 1] = {
             text = T(_("Grid: %1 x %1"), size),
-            checked = (size == current),
+            mandatory = (size == current) and "✓" or nil,
             callback = function()
                 self.plugin:setGridSize(size)
                 self.board = self.plugin:getBoard()
@@ -1044,7 +1044,7 @@ function WordSearchScreen:showGridScaleMenu()
         local scale = GRID_SCALES[key]
         items[#items + 1] = {
             text = scale and scale.label or key,
-            checked = (key == current),
+            mandatory = (key == current) and "✓" or nil,
             callback = function()
                 if key ~= current then
                     self.plugin:setGridScale(key)
@@ -1107,7 +1107,7 @@ function WordSearchScreen:showFontMenu()
     local items = {
         {
             text = _("Default (reading font)"),
-            checked = (current == nil),
+            mandatory = (current == nil) and "✓" or nil,
             callback = function()
                 self.plugin:setGridFont(nil)
                 self.grid_widget:setFont(nil, self.plugin:getFontFill())
@@ -1124,7 +1124,7 @@ function WordSearchScreen:showFontMenu()
         end
         items[#items + 1] = {
             text = name,
-            checked = (current == path),
+            mandatory = (current == path) and "✓" or nil,
             callback = function()
                 self.plugin:setGridFont(path)
                 self.grid_widget:setFont(path, self.plugin:getFontFill())
@@ -1160,7 +1160,7 @@ function WordSearchScreen:showFontSizeMenu()
     for _, key in ipairs(GridFont.FONT_SIZE_ORDER) do
         items[#items + 1] = {
             text = labels[key] or key,
-            checked = (key == current),
+            mandatory = (key == current) and "✓" or nil,
             callback = function()
                 self.plugin:setFontSize(key)
                 self.grid_widget:setFont(self.plugin:getGridFont(), self.plugin:getFontFill())
@@ -1231,7 +1231,7 @@ function WordSearchScreen:chooseWordList()
     for _, entry in ipairs(lists) do
         items[#items + 1] = {
             text = entry.title,
-            checked = (entry.path == self.plugin:getWordListPath()),
+            mandatory = (entry.path == self.plugin:getWordListPath()) and "✓" or nil,
             callback = function()
                 self.plugin:setWordList(entry.path)
                 self.board = self.plugin:getBoard()
