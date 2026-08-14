@@ -4,7 +4,7 @@ This KOReader plugin generates classic word search puzzles directly on your devi
 
 ## Gameplay overview
 1. Launch **Tools → Word Search**.
-2. Tap the first and last letters of a word to select it. A line is drawn behind the grid letters and highlighted when the match is correct.
+2. Tap the first and last letters of a word to select it. A line is drawn behind the grid letters and highlighted when the match is correct — in color on color-capable devices, in gray otherwise.
 3. Tap **Words** to view the current list (found words are struck through).
 4. Use **Show solution / Hide solution** to toggle helper lines for every hidden word.
 5. A congratulatory overlay appears once every word is found.
@@ -12,6 +12,7 @@ This KOReader plugin generates classic word search puzzles directly on your devi
 ## Adjustable settings
 All settings persist between sessions.
 
+- **Colored highlights** *(color devices only)*: Each found word gets its own color from an eight-color palette, revealed-but-unfound words are marked in red, and the tapped cell is tinted blue. The entry only appears in the Settings menu when the device has a color screen and color rendering is enabled in KOReader (Screen → Color rendering); everything falls back to the original grayscale lines otherwise. Enabled by default.
 - **Word count**: Choose 6–24 words per puzzle. Changing the count regenerates the grid.
 - **Grid size**: Pick an 8×8 up to 16×16 board. The plugin automatically validates sizes and regenerates the puzzle.
 - **Grid zoom**: Switch between predefined zoom levels that control the rendered cell size.

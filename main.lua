@@ -66,6 +66,30 @@ local DIRECTIONS = {
     { name = "SW", dx = -1, dy =  1 },
 }
 
+-- Highlight colours used on colour-capable devices. They are painted behind the
+-- black letters, so every entry stays light enough to keep the grid readable
+-- (which also helps on washed-out Kaleido panels).
+local HIGHLIGHT_PALETTE = {
+    Blitbuffer.ColorRGB32(0xF7, 0xC5, 0x4D, 0xFF), -- amber
+    Blitbuffer.ColorRGB32(0x86, 0xB6, 0xF2, 0xFF), -- blue
+    Blitbuffer.ColorRGB32(0x8F, 0xD1, 0x74, 0xFF), -- green
+    Blitbuffer.ColorRGB32(0xF2, 0x9C, 0xC2, 0xFF), -- pink
+    Blitbuffer.ColorRGB32(0xB9, 0xA3, 0xEA, 0xFF), -- violet
+    Blitbuffer.ColorRGB32(0xF4, 0x9E, 0x63, 0xFF), -- orange
+    Blitbuffer.ColorRGB32(0x6F, 0xCF, 0xC6, 0xFF), -- teal
+    Blitbuffer.ColorRGB32(0xC4, 0xD6, 0x5B, 0xFF), -- lime
+}
+-- Revealed-but-not-found words, so a solution hint never looks like a hit.
+local SOLUTION_COLOR = Blitbuffer.ColorRGB32(0xE0, 0x7A, 0x7A, 0xFF)
+-- Cell under the last tap (the pending selection start).
+local SELECTION_COLOR = Blitbuffer.ColorRGB32(0xCF, 0xE4, 0xFF, 0xFF)
+
+-- True when the device has a colour screen and colour rendering is not turned
+-- off in KOReader's screen settings.
+local function deviceSupportsColor()
+    return Screen.isColorEnabled ~= nil and Screen:isColorEnabled() and true or false
+end
+
 local function safeUpper(text)
     if not text then
         return ""
@@ -489,17 +513,28 @@ function WordSearchBoard:isSolutionCell(row, col)
     return self.solution_mask and self.solution_mask[row] and self.solution_mask[row][col]
 end
 
-local function drawThickPoint(bb, cx, cy, thickness, color)
-    local half = math.floor(thickness / 2)
-    bb:paintRect(cx - half, cy - half, thickness, thickness, color)
+-- paintRect() runs every colour through getColor8(), i.e. it flattens it to a
+-- luminance value: a ColorRGB32 painted that way comes out gray even on a
+-- colour screen. paintRectRGB32() is the one that keeps the channels.
+local function paintRect(bb, x, y, w, h, color, is_rgb)
+    if is_rgb and bb.paintRectRGB32 then
+        bb:paintRectRGB32(x, y, w, h, color)
+    else
+        bb:paintRect(x, y, w, h, color)
+    end
 end
 
-local function drawThickLine(bb, x1, y1, x2, y2, thickness, color)
+local function drawThickPoint(bb, cx, cy, thickness, color, is_rgb)
+    local half = math.floor(thickness / 2)
+    paintRect(bb, cx - half, cy - half, thickness, thickness, color, is_rgb)
+end
+
+local function drawThickLine(bb, x1, y1, x2, y2, thickness, color, is_rgb)
     local dx = x2 - x1
     local dy = y2 - y1
     local steps = math.max(math.abs(dx), math.abs(dy))
     if steps == 0 then
-        drawThickPoint(bb, x1, y1, thickness, color)
+        drawThickPoint(bb, x1, y1, thickness, color, is_rgb)
         return
     end
     local step_x = dx / steps
@@ -507,7 +542,7 @@ local function drawThickLine(bb, x1, y1, x2, y2, thickness, color)
     for i = 0, steps do
         local px = math.floor(x1 + step_x * i)
         local py = math.floor(y1 + step_y * i)
-        drawThickPoint(bb, px, py, thickness, color)
+        drawThickPoint(bb, px, py, thickness, color, is_rgb)
     end
 end
 
@@ -516,7 +551,18 @@ local WordGridWidget = InputContainer:extend{
     scale = nil,
     font = nil,       -- font file path, or nil for the default reading font (cfont)
     font_fill = nil,  -- fraction of the cell a letter should fill
+    color_highlights = true, -- draw found words in colour (colour devices only)
 }
+
+-- Colours are only used when the user asked for them AND the device can show
+-- them; everything falls back to the original grayscale look otherwise.
+function WordGridWidget:usesColor()
+    return self.color_highlights ~= false and deviceSupportsColor()
+end
+
+function WordGridWidget:setColorHighlights(enabled)
+    self.color_highlights = enabled and true or false
+end
 
 function WordGridWidget:getGridSize()
     if self.board and self.board.getSize then
@@ -654,16 +700,19 @@ function WordGridWidget:paintTo(bb, x, y)
     bb:paintRect(x, y, self.dimen.w, self.dimen.h, Blitbuffer.COLOR_WHITE)
     local grid_size = self:getGridSize()
 
+    local use_color = self:usesColor()
     local highlight = self.highlight_cell
     for row = 1, grid_size do
         for col = 1, grid_size do
             local cell_x = x + (col - 1) * self.cell_size
             local cell_y = y + (row - 1) * self.cell_size
             local color = Blitbuffer.COLOR_WHITE
+            local color_is_rgb = false
             if highlight and highlight.row == row and highlight.col == col then
-                color = Blitbuffer.COLOR_GRAY
+                color = use_color and SELECTION_COLOR or Blitbuffer.COLOR_GRAY
+                color_is_rgb = use_color
             end
-            bb:paintRect(cell_x, cell_y, self.cell_size - 1, self.cell_size - 1, color)
+            paintRect(bb, cell_x, cell_y, self.cell_size - 1, self.cell_size - 1, color, color_is_rgb)
             -- draw border
             bb:paintRect(cell_x, cell_y, self.cell_size, 1, Blitbuffer.COLOR_GRAY_8)
             bb:paintRect(cell_x, cell_y + self.cell_size - 1, self.cell_size, 1, Blitbuffer.COLOR_GRAY_8)
@@ -673,9 +722,25 @@ function WordGridWidget:paintTo(bb, x, y)
     end
 
     -- overlay lines for found words and (optionally) solution hints (above grid, below letters)
-    local highlight_color = Blitbuffer.COLOR_GRAY_B
     local line_thickness = math.max(2, math.floor(self.cell_size / 4))
-    local function drawEntryLines(entries)
+    -- Every placed word keeps the same palette entry for the whole puzzle, so a
+    -- word does not change colour as others are found.
+    local palette_slot = {}
+    if use_color then
+        for idx, entry in ipairs(self.board.placed_words) do
+            palette_slot[entry] = ((idx - 1) % #HIGHLIGHT_PALETTE) + 1
+        end
+    end
+    local function entryColor(entry, found)
+        if not use_color then
+            return Blitbuffer.COLOR_GRAY_B
+        end
+        if not found then
+            return SOLUTION_COLOR
+        end
+        return HIGHLIGHT_PALETTE[palette_slot[entry] or 1]
+    end
+    local function drawEntryLines(entries, found)
         for _, entry in ipairs(entries) do
             local first = entry.positions[1]
             local last = entry.positions[#entry.positions]
@@ -684,12 +749,12 @@ function WordGridWidget:paintTo(bb, x, y)
                 local start_y = y + (first.row - 1) * self.cell_size + math.floor(self.cell_size / 2)
                 local end_x = x + (last.col - 1) * self.cell_size + math.floor(self.cell_size / 2)
                 local end_y = y + (last.row - 1) * self.cell_size + math.floor(self.cell_size / 2)
-                drawThickLine(bb, start_x, start_y, end_x, end_y, line_thickness, highlight_color)
+                drawThickLine(bb, start_x, start_y, end_x, end_y, line_thickness, entryColor(entry, found), use_color)
             end
         end
     end
     local found_entries = self.board:getFoundEntries()
-    drawEntryLines(found_entries)
+    drawEntryLines(found_entries, true)
     if self.board:isShowingSolution() then
         local found_lookup = {}
         for _, entry in ipairs(found_entries) do
@@ -701,7 +766,7 @@ function WordGridWidget:paintTo(bb, x, y)
                 missing_entries[#missing_entries + 1] = entry
             end
         end
-        drawEntryLines(missing_entries)
+        drawEntryLines(missing_entries, false)
     end
 
     for row = 1, grid_size do
@@ -721,10 +786,21 @@ function WordGridWidget:paintTo(bb, x, y)
 
 end
 
+-- Kaleido panels only switch to a colour waveform when the refresh carries the
+-- dither hint, so ask for partial+dither while coloured lines are on screen.
+-- Without colours we keep the cheaper plain "ui" refresh.
+function WordGridWidget:getRefreshHints()
+    if self:usesColor() then
+        return "partial", true
+    end
+    return "ui", false
+end
+
 function WordGridWidget:refresh()
     local rect = self.paint_rect
     UIManager:setDirty(self, function()
-        return "ui", Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }
+        local mode, dither = self:getRefreshHints()
+        return mode, Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }, dither
     end)
 end
 
@@ -766,14 +842,22 @@ function WordSearchScreen:init()
         scale = GRID_SCALES[self.plugin:getGridScale()] or GRID_SCALES[DEFAULT_GRID_SCALE],
         font = self.plugin:getGridFont(),
         font_fill = self.plugin:getFontFill(),
+        color_highlights = self.plugin:getColorHighlights(),
         onCellTapped = function(row, col, is_hold)
             self:onCellTapped(row, col, is_hold)
         end,
     }
+    self:updateDitherHint()
     self.stats_label = TextWidget:new{ face = Font:getFace("smallinfofont"), text = "" }
     self:rebuildLayout()
     self:updateStatus()
     self:updateWordList()
+end
+
+-- UIManager honours this flag on the window stack, so full-screen refreshes of
+-- the game also get the colour-friendly waveform.
+function WordSearchScreen:updateDitherHint()
+    self.dithered = self.grid_widget:usesColor() or nil
 end
 
 function WordSearchScreen:paintTo(bb, x, y)
@@ -887,7 +971,10 @@ function WordSearchScreen:updateStatus()
     local remaining = math.max(0, #self.board.placed_words - found)
     local text = T(_("Found: %1 · Remaining: %2"), found, remaining)
     self.stats_label:setText(text)
-    UIManager:setDirty(self, function() return "ui", self.dimen end)
+    UIManager:setDirty(self, function()
+        local mode, dither = self.grid_widget:getRefreshHints()
+        return mode, self.dimen, dither
+    end)
 end
 
 function WordSearchScreen:updateWordList()
@@ -904,7 +991,8 @@ end
 
 function WordSearchScreen:refreshScreen()
     UIManager:setDirty(self, function()
-        return "ui", self.dimen
+        local mode, dither = self.grid_widget:getRefreshHints()
+        return mode, self.dimen, dither
     end)
 end
 
@@ -912,7 +1000,8 @@ function WordSearchScreen:refreshGridArea()
     local rect = self.grid_widget and self.grid_widget.paint_rect
     if rect then
         UIManager:setDirty(self, function()
-            return "ui", Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }
+            local mode, dither = self.grid_widget:getRefreshHints()
+            return mode, Geom:new{ x = rect.x, y = rect.y, w = rect.w, h = rect.h }, dither
         end)
     else
         self:refreshScreen()
@@ -1083,6 +1172,18 @@ function WordSearchScreen:showSettingsMenu()
         { text = _("Font"),       callback = function() closeMenu(); self:showFontMenu() end },
         { text = _("Font size"),  callback = function() closeMenu(); self:showFontSizeMenu() end },
     }
+    -- Only worth offering where the device can actually show colours.
+    if deviceSupportsColor() then
+        items[#items + 1] = {
+            text = _("Colored highlights"),
+            mandatory = self.plugin:getColorHighlights() and "✓" or nil,
+            callback = function()
+                self:toggleColorHighlights()
+                closeMenu()
+                return true
+            end,
+        }
+    end
     menu = Menu:new{
         title = _("Settings"),
         item_table = items,
@@ -1094,6 +1195,14 @@ function WordSearchScreen:showSettingsMenu()
         self:refreshScreen()
     end
     UIManager:show(menu)
+end
+
+function WordSearchScreen:toggleColorHighlights()
+    local enabled = not self.plugin:getColorHighlights()
+    self.plugin:setColorHighlights(enabled)
+    self.grid_widget:setColorHighlights(enabled)
+    self:updateDitherHint()
+    self:refreshScreen()
 end
 
 function WordSearchScreen:showFontMenu()
@@ -1339,6 +1448,7 @@ function WordSearch:init()
     self.grid_size = normalizeGridSize(self.settings:readSetting("grid_size") or DEFAULT_GRID_SIZE)
     self.grid_font = self.settings:readSetting("grid_font") -- may be nil (= default reading font)
     self.font_size = GridFont.normalizeFontSize(self.settings:readSetting("font_size"))
+    self.color_highlights = self.settings:nilOrTrue("color_highlights") -- on by default on colour devices
     self.state_file = DataStorage:getSettingsDir() .. "/wordsearch_state.json"
     self._cached_state = self:loadBoardState()
     self.ui.menu:registerToMainMenu(self)
@@ -1558,6 +1668,20 @@ function WordSearch:setGridFont(path)
     end
     self.settings:flush()
     self:saveBoardState()
+end
+
+function WordSearch:getColorHighlights()
+    return self.color_highlights ~= false
+end
+
+function WordSearch:setColorHighlights(enabled)
+    enabled = enabled and true or false
+    if self:getColorHighlights() == enabled then
+        return
+    end
+    self.color_highlights = enabled
+    self.settings:saveSetting("color_highlights", enabled)
+    self.settings:flush()
 end
 
 function WordSearch:getFontSize()
