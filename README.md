@@ -35,6 +35,23 @@ abortion
 
 Add your own `.txt` files to this folder (or point the plugin to any accessible file). After selecting a new list, the plugin stores the path and reloads with the updated words.
 
+### Bundled lists
+
+| File | Title | Words |
+|---|---|---|
+| `english_basic.txt` | English_Basics_2k | ~1.9k |
+| `english_5k.txt` | English_Basic_5k | ~5.4k |
+| `french_basic.txt` | Francais_Courant_2k | 2,000 |
+| `french_5k.txt` | Francais_5k | 5,000 |
+
+The French lists contain the most frequent common nouns (singular, 4–10 letters)
+from **[Lexique 3.83](http://www.lexique.org/)** by Boris New and Christophe Pallier,
+licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+Words are ranked by combined book and film-subtitle frequency; accents are removed
+(É→E, Ç→C, Œ→OE) since the grid only uses A–Z; words used mostly as another part of
+speech (e.g. adjectives) and vulgar or offensive words are excluded. The basic list
+is a subset of the 5k list.
+
 ## Saving & continuity
 The plugin saves the active board, chosen list, grid size, max word count, and zoom level to KOReader's settings directory. Closing and reopening KOReader resumes exactly where you left off unless you generate a new puzzle.
 
